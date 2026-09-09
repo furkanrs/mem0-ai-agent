@@ -1,128 +1,151 @@
-from mem0 import Memory
+from mem0 import MemoryClient
 from email.parser import Parser
 from dotenv import load_dotenv
+import os
 
-from config import config
 
-load_dotenv("../.env")
+load_dotenv(".env")
 
-# Initialize local Mem0
 
-memory = Memory.from_config(config)
+# Initialize Mem0 client
+client = MemoryClient(
+    api_key=os.getenv("MEM0_API_KEY")
+)
+
 
 class EmailProcessor:
-def **init**(self):
-"""Initialize the Email Processor with local Mem0 memory"""
-self.memory = memory
+    def __init__(self):
+        """Initialize the Email Processor with Mem0 memory client"""
+        self.client = client
 
-```
-def process_email(self, email_content, user_id):
-    """
-    Process an email and store it in Mem0 memory
-    """
+    def process_email(self, email_content, user_id):
+        """
+        Process an email and store it in Mem0 memory
 
-    # Parse email
-    parser = Parser()
-    email = parser.parsestr(email_content)
+        Args:
+            email_content (str): Raw email content
+            user_id (str): User identifier for memory association
+        """
 
-    # Extract email details
-    sender = email["from"]
-    recipient = email["to"]
-    subject = email["subject"]
-    date = email["date"]
-    body = self._get_email_body(email)
+        # Parse email
+        parser = Parser()
+        email = parser.parsestr(email_content)
 
-    # Create message object for Mem0
-    message = {
-        "role": "user",
-        "content": f"Email from {sender}: {subject}\n\n{body}",
-    }
+        # Extract email details
+        sender = email["from"]
+        recipient = email["to"]
+        subject = email["subject"]
+        date = email["date"]
+        body = self._get_email_body(email)
 
-    # Create metadata for better retrieval
-    metadata = {
-        "email_type": "incoming",
-        "sender": sender,
-        "recipient": recipient,
-        "subject": subject,
-        "date": date,
-        "category": "email",
-    }
+        # Create message object for Mem0
+        message = {
+            "role": "user",
+            "content": f"Email from {sender}: {subject}\n\n{body}",
+        }
 
-    # Store using local Mem0
-    response = self.memory.add(
-        messages=[message],
-        user_id=user_id,
-        metadata=metadata,
-    )
+        # Create metadata for better retrieval
+        metadata = {
+            "email_type": "incoming",
+            "sender": sender,
+            "recipient": recipient,
+            "subject": subject,
+            "date": date,
+        }
 
-    return response
+        # Store in Mem0 with appropriate categories
+        response = self.client.add(
+            messages=[message],
+            user_id=user_id,
+            metadata=metadata,
+            categories=["email", "correspondence"],
+            version="v2",
+        )
 
-def _get_email_body(self, email):
-    """Extract the body content from an email"""
+        return response
 
-    # Simplified extraction
-    if email.is_multipart():
-        for part in email.walk():
-            if part.get_content_type() == "text/plain":
-                return part.get_payload(decode=True).decode()
-    else:
-        return email.get_payload(decode=True).decode()
+    def _get_email_body(self, email):
+        """Extract the body content from an email"""
 
-def search_emails(self, query, user_id):
-    """
-    Search through stored emails
-    """
+        # Simplified extraction - in real-world, handle multipart emails
+        if email.is_multipart():
+            for part in email.walk():
+                if part.get_content_type() == "text/plain":
+                    return part.get_payload(
+                        decode=True
+                    ).decode()
 
-    # Search relevant memories for this user
-    results = self.memory.search(
-        query=query,
-        filters={"user_id": user_id},
-        limit=10,
-    )
+        else:
+            return email.get_payload(
+                decode=True
+            ).decode()
 
-    # Keep only email-related memories
-    email_results = [
-        result
-        for result in results["results"]
-        if result.get("metadata", {}).get("category") == "email"
-    ]
+    def search_emails(self, query, user_id):
+        """
+        Search through stored emails
 
-    return {"results": email_results}
+        Args:
+            query (str): Search query
+            user_id (str): User identifier
+        """
 
-def get_email_thread(self, subject, user_id):
-    """
-    Retrieve all emails in a thread based on subject
-    """
+        # Search Mem0 for relevant emails
+        results = self.client.search(
+            query=query,
+            filters={
+                "user_id": user_id
+            },
+            categories=["email"],
+            output_format="v1.1",
+            version="v2",
+        )
 
-    # Get all memories for this user
-    results = self.memory.get_all(
-        filters={"user_id": user_id}
-    )
+        return results
 
-    # Filter email memories by subject
-    thread = [
-        result
-        for result in results["results"]
-        if result.get("metadata", {}).get("category") == "email"
-        and subject.lower()
-        in result.get("metadata", {}).get("subject", "").lower()
-    ]
+    def get_email_thread(self, subject, user_id):
+        """
+        Retrieve all emails in a thread based on subject
 
-    return {"results": thread}
-```
+        Args:
+            subject (str): Email subject to match
+            user_id (str): User identifier
+        """
+
+        # Get all memories for this user
+        results = self.client.get_all(
+            version="v2",
+            filters={
+                "user_id": user_id
+            },
+            output_format="v1.1",
+        )
+
+        # Find memories with the matching email subject
+        matching_emails = []
+
+        for memory in results["results"]:
+            metadata = memory.get("metadata", {})
+            stored_subject = metadata.get("subject", "")
+
+            if subject.lower() in stored_subject.lower():
+                matching_emails.append(memory)
+
+        return {
+            "results": matching_emails
+        }
+
 
 # Initialize the processor
-
 processor = EmailProcessor()
 
-# Example raw email
 
-sample_email = """From: [alice@example.com](mailto:alice@example.com)
-To: [bob@example.com](mailto:bob@example.com)
+# Example raw email
+sample_email = """From: d@example.com
+To: f@example.com
 Subject: Meeting Schedule Update
 Date: Mon, 15 Jul 2024 14:22:05 -0700
 
-Hi Bob,
+Hi Furkan,
 
 I wanted to update you on the schedule for our upcoming project meeting.
 We'll be meeting this Thursday at 2pm instead of Friday.
@@ -130,45 +153,43 @@ We'll be meeting this Thursday at 2pm instead of Friday.
 Could you please prepare your section of the presentation?
 
 Thanks,
-Alice
+Dani
 """
 
-# Process and store the email
 
-user_id = "[bob@example.com](mailto:bob@example.com)"
+# Process and store the email
+user_id = "f@example.com"
 
 response = processor.process_email(
-sample_email,
-user_id
+    sample_email,
+    user_id
 )
 
-print("\nMemory result:")
+print("\nMemory add result:")
 print(response)
 
-# Search for emails about meetings
 
+# Later, search for emails about meetings
 meeting_emails = processor.search_emails(
-"meeting schedule",
-user_id
+    "meeting schedule",
+    user_id
 )
 
 print(
-f"\nFound {len(meeting_emails['results'])} "
-f"relevant emails"
+    f"\nFound {len(meeting_emails['results'])} relevant emails"
 )
 
 print(meeting_emails)
 
-# Retrieve email thread
 
+# Retrieve all emails in the thread
 thread = processor.get_email_thread(
-"Meeting Schedule",
-user_id
+    "Meeting Schedule",
+    user_id
 )
 
 print(
-f"\nFound {len(thread['results'])} "
-f"emails in the thread"
+    f"\nFound {len(thread['results'])} emails in the thread"
 )
 
 print(thread)

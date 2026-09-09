@@ -2,6 +2,7 @@ config = {
     "vector_store": {
         "provider": "qdrant",
         "config": {
+            "collection_name": "customer_support_memory",
             "host": "localhost",
             "port": 6333,
             "embedding_model_dims": 768,
@@ -21,12 +22,11 @@ config = {
     "embedder": {
         "provider": "ollama",
         "config": {
-            "model": "nomic-embed-text",
+            "model": "nomic-embed-text:latest",
+            "embedding_dims": 768,
             "ollama_base_url": "http://localhost:11434",
         },
     },
 
     "history_db_path": "history.db",
-
-    "version": "v1.1",
 }

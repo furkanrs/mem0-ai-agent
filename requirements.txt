@@ -1,3 +1,4 @@
-mem0ai
-ollama
+mem0ai==2.0.20
+ollama==0.6.2
 python-dotenv
+qdrant-client
