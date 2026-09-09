@@ -1,126 +1,128 @@
-from mem0 import MemoryClient
+from mem0 import Memory
 from email.parser import Parser
 from dotenv import load_dotenv
 
-load_dotenv(".env")
+from config import config
 
+load_dotenv("../.env")
 
-# Initialize Mem0 client
-client = MemoryClient()
+# Initialize local Mem0
 
+memory = Memory.from_config(config)
 
 class EmailProcessor:
-    def __init__(self):
-        """Initialize the Email Processor with Mem0 memory client"""
-        self.client = client
+def **init**(self):
+"""Initialize the Email Processor with local Mem0 memory"""
+self.memory = memory
 
-    def process_email(self, email_content, user_id):
-        """
-        Process an email and store it in Mem0 memory
+```
+def process_email(self, email_content, user_id):
+    """
+    Process an email and store it in Mem0 memory
+    """
 
-        Args:
-            email_content (str): Raw email content
-            user_id (str): User identifier for memory association
-        """
-        # Parse email
-        parser = Parser()
-        email = parser.parsestr(email_content)
+    # Parse email
+    parser = Parser()
+    email = parser.parsestr(email_content)
 
-        # Extract email details
-        sender = email["from"]
-        recipient = email["to"]
-        subject = email["subject"]
-        date = email["date"]
-        body = self._get_email_body(email)
+    # Extract email details
+    sender = email["from"]
+    recipient = email["to"]
+    subject = email["subject"]
+    date = email["date"]
+    body = self._get_email_body(email)
 
-        # Create message object for Mem0
-        message = {
-            "role": "user",
-            "content": f"Email from {sender}: {subject}\n\n{body}",
-        }
+    # Create message object for Mem0
+    message = {
+        "role": "user",
+        "content": f"Email from {sender}: {subject}\n\n{body}",
+    }
 
-        # Create metadata for better retrieval
-        metadata = {
-            "email_type": "incoming",
-            "sender": sender,
-            "recipient": recipient,
-            "subject": subject,
-            "date": date,
-        }
+    # Create metadata for better retrieval
+    metadata = {
+        "email_type": "incoming",
+        "sender": sender,
+        "recipient": recipient,
+        "subject": subject,
+        "date": date,
+        "category": "email",
+    }
 
-        # Store in Mem0 with appropriate categories
-        response = self.client.add(
-            messages=[message],
-            user_id=user_id,
-            metadata=metadata,
-            categories=["email", "correspondence"],
-            version="v2",
-        )
+    # Store using local Mem0
+    response = self.memory.add(
+        messages=[message],
+        user_id=user_id,
+        metadata=metadata,
+    )
 
-        return response
+    return response
 
-    def _get_email_body(self, email):
-        """Extract the body content from an email"""
-        # Simplified extraction - in real-world, handle multipart emails
-        if email.is_multipart():
-            for part in email.walk():
-                if part.get_content_type() == "text/plain":
-                    return part.get_payload(decode=True).decode()
-        else:
-            return email.get_payload(decode=True).decode()
+def _get_email_body(self, email):
+    """Extract the body content from an email"""
 
-    def search_emails(self, query, user_id):
-        """
-        Search through stored emails
+    # Simplified extraction
+    if email.is_multipart():
+        for part in email.walk():
+            if part.get_content_type() == "text/plain":
+                return part.get_payload(decode=True).decode()
+    else:
+        return email.get_payload(decode=True).decode()
 
-        Args:
-            query (str): Search query
-            user_id (str): User identifier
-        """
-        # Search Mem0 for relevant emails
-        results = self.client.search(
-    query=query,
-    filters={"user_id": user_id},
-    categories=["email"],
-    output_format="v1.1",
-    version="v2",
-)
+def search_emails(self, query, user_id):
+    """
+    Search through stored emails
+    """
 
-        return results
+    # Search relevant memories for this user
+    results = self.memory.search(
+        query=query,
+        filters={"user_id": user_id},
+        limit=10,
+    )
 
-    def get_email_thread(self, subject, user_id):
-        """
-        Retrieve all emails in a thread based on subject
+    # Keep only email-related memories
+    email_results = [
+        result
+        for result in results["results"]
+        if result.get("metadata", {}).get("category") == "email"
+    ]
 
-        Args:
-            subject (str): Email subject to match
-            user_id (str): User identifier
-        """
-        filters = {
-            "AND": [
-                {"user_id": user_id},
-                {"categories": {"contains": "email"}},
-                {"metadata": {"subject": {"contains": subject}}},
-            ]
-        }
+    return {"results": email_results}
 
-        thread = self.client.get_all(
-            version="v2", filters=filters, output_format="v1.1"
-        )
+def get_email_thread(self, subject, user_id):
+    """
+    Retrieve all emails in a thread based on subject
+    """
 
-        return thread
+    # Get all memories for this user
+    results = self.memory.get_all(
+        filters={"user_id": user_id}
+    )
 
+    # Filter email memories by subject
+    thread = [
+        result
+        for result in results["results"]
+        if result.get("metadata", {}).get("category") == "email"
+        and subject.lower()
+        in result.get("metadata", {}).get("subject", "").lower()
+    ]
+
+    return {"results": thread}
+```
 
 # Initialize the processor
+
 processor = EmailProcessor()
 
 # Example raw email
-sample_email = """From: dani@example.com
-To: furkan@example.com
+
+sample_email = """From: [alice@example.com](mailto:alice@example.com)
+To: [bob@example.com](mailto:bob@example.com)
 Subject: Meeting Schedule Update
 Date: Mon, 15 Jul 2024 14:22:05 -0700
 
-Hi furkan,
+Hi Bob,
 
 I wanted to update you on the schedule for our upcoming project meeting.
 We'll be meeting this Thursday at 2pm instead of Friday.
@@ -128,13 +130,45 @@ We'll be meeting this Thursday at 2pm instead of Friday.
 Could you please prepare your section of the presentation?
 
 Thanks,
-dani
+Alice
 """
 
 # Process and store the email
-user_id = "furkan@example.com"
-processor.process_email(sample_email, user_id)
 
-# Later, search for emails about meetings
-meeting_emails = processor.search_emails("meeting schedule", user_id)
-print(f"Found {len(meeting_emails['results'])} relevant emails")
+user_id = "[bob@example.com](mailto:bob@example.com)"
+
+response = processor.process_email(
+sample_email,
+user_id
+)
+
+print("\nMemory result:")
+print(response)
+
+# Search for emails about meetings
+
+meeting_emails = processor.search_emails(
+"meeting schedule",
+user_id
+)
+
+print(
+f"\nFound {len(meeting_emails['results'])} "
+f"relevant emails"
+)
+
+print(meeting_emails)
+
+# Retrieve email thread
+
+thread = processor.get_email_thread(
+"Meeting Schedule",
+user_id
+)
+
+print(
+f"\nFound {len(thread['results'])} "
+f"emails in the thread"
+)
+
+print(thread)

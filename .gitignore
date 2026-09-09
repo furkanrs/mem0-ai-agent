@@ -13,3 +13,10 @@ __pycache__/
 
 # Operating system files
 .DS_Store
+
+# Local database files
+history.db
+*.db
+
+# Qdrant local storage
+docker/qdrant_data/
